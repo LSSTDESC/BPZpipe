@@ -1,0 +1,31 @@
+Executing stage: BPZpipeStage1
+Running BPZ...
+finished
+
+Current time  Fri Apr  5 15:56:37 2019
+
+m0column name:  scatmag_i
+scatmag_i
+18.473843
+File ./outputs/photoz_pointfile.txt exists. Copying it to ./outputs/photoz_pointfile.txt.bak
+0.68 0.9944500000000001
+ML * prior -- NOT QUITE BAYESIAN
+
+
+PHOTOMETRIC CALIBRATION TESTS
+If the dmag are large, add them to the .columns file (zp_offset), then re-run BPZ.
+(For better results, first re-run with -ONLY_TYPE yes to fit SEDs to known spec-z.)
+
+  fo/ft    dmag   nobj   filter
+  1.124    0.127   775   DC2LSST_u
+  1.001    0.001   832   DC2LSST_g
+  0.995   -0.005   832   DC2LSST_r
+  1.002    0.002   832   DC2LSST_i
+  1.000   -0.000   832   DC2LSST_z
+  1.002    0.002   832   DC2LSST_y
+fo/ft = Average f_obs/f_model weighted by f_obs/ef_obs for objects with ODDS >= 0.68
+dmag = magnitude offset which should be applied (added) to the photometry (zp_offset)
+nobj = # of galaxies considered in that filter (detected and high ODDS >= 0.68)
+
+Elapsed time 00:00:23
+

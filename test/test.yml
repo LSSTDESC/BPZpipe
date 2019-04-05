@@ -1,0 +1,24 @@
+
+launcher: local
+
+modules: bpzpipe
+
+stages:
+    - name: BPZpipeStage1
+      nprocess: 1
+
+output_dir: ./outputs
+
+inputs:
+    input_photometry_file: test/test1000.h5
+
+outputs:
+    photoz_pointfile: test.bpz
+    photoz_probsfile: test_probs.out
+
+resume: False
+log_dir: ./test/logs
+pipeline_log: ./test/log.txt
+config: test/config.yml
+
+
