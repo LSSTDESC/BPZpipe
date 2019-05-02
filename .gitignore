@@ -4,3 +4,4 @@ outputs/*.hdf
 outputs/*.h5
 outputs/*.sacc
 outputs/*.fits
+*.*~
