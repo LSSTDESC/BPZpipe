@@ -34,6 +34,7 @@ class PZBPZ2(PipelineStage):
         "sigma_g": 0.03,  # use sigma_g <= 0 for no convolution
         "chunk_rows": 100,
         "mag_err_min": 1e-3,
+        "point_estimate": "mode",  # mean, mode, or median
     }
 
     def run(self):
@@ -254,6 +255,7 @@ class PZBPZ2(PipelineStage):
         # Space for the output
         pdfs = np.zeros((ng, nz))
         point_estimates = np.zeros((5, ng))
+        point_estimator = self.config['point_estimate']
 
         # Metacal variants
         suffices = ["", "_1p", "_1m", "_2p", "_2m"]
@@ -270,8 +272,19 @@ class PZBPZ2(PipelineStage):
                 if suffix=="":
                     pdfs[i] = pdf
 
-                # The pdf already sums to unity, so this gives us the mean
-                point_estimates[s, i] = (pdf * z).sum()
+                if point_estimator == 'mean':
+                    # The pdf already sums to unity, so this gives us the mean
+                    point_estimates[s, i] = (pdf * z).sum()
+                elif point_estimator == 'mode':
+                    # This is the BPZ default
+                    point_estimates[s, i] = z[np.argmax(pdf)]
+                elif point_estimator == 'median':
+                    # Just for completeness, not idea if sensible. Defined below
+                    point_estimates[s, i] = pdf_median(z, pdf)
+                else:
+                    raise ValueError(f"Unknown value for point_estimate parameter"
+                        f"'{point_estimator}' - should be 'mean', 'mode', or 'median'")
+
 
 
         # Return full set
@@ -349,3 +362,11 @@ class PZBPZ2(PipelineStage):
         group['mu_2m'][start:end] = point_estimates[4]
 
 
+
+
+def pdf_median(z, p):
+    psum = p.sum()
+    cdf = np.cumsum(p)
+    cdf = np.concatenate([[0.0], cdf])
+    i = np.where(cdf<psum/2.0)[0].max()
+    return z[i]
