@@ -3,3 +3,7 @@ BPZpipeStage1:
   INTERP: 0  # this will take a default value of "0" if not set here
   param_file: test/test.pars
   path_to_bpz: /global/projecta/projectdirs/lsst/groups/PZ/BPZ/BPZpy3/pz_pdf/pz/BPZ
+
+PZBPZ2:
+  path_to_bpz: /global/projecta/projectdirs/lsst/groups/PZ/BPZ/BPZpy3/pz_pdf/pz/BPZ
+
