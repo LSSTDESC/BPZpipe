@@ -1,6 +1,6 @@
 from ceci import PipelineStage
 from descformats import TextFile, HDFFile, YamlFile
-from txpipe.data_types import PhotozPDFFile
+#from txpipe.data_types import PhotozPDFFile
 import os
 import sys
 import numpy as np
@@ -16,7 +16,9 @@ class PZBPZ2(PipelineStage):
         ('photometry_catalog', HDFFile),
     ]
     outputs = [
-        ('photoz_pdfs', PhotozPDFFile),
+#        ('photoz_pdfs', PhotozPDFFile),
+        ('photoz_pdfs', HDFFile),
+
     ]
     config_options = {
         "path_to_bpz": str,
@@ -26,6 +28,7 @@ class PZBPZ2(PipelineStage):
         "interp": 0,
         "prior_file": 'dc2v4_PCA_cosmodc2v114_py3',
         "spectra_file": 'SED/dc2_PCAsortedtemplates_v4.list',
+        "columns_file": 'test/CSDC2114_test.columns',
         "ab_dir" : "AB",
         "bands" : "ugrizy",
         "zp_errors": [0.01, 0.01, 0.01, 0.01, 0.01, 0.01],
@@ -47,7 +50,8 @@ class PZBPZ2(PipelineStage):
 
         # Columns we will need from the data
         # Note that we need all the metacalibrated variants too.
-        suffices = ["", "_1p", "_1m", "_2p", "_2m"]
+        #suffices = ["", "_1p", "_1m", "_2p", "_2m"]
+        suffices = [""]
         bands = self.config['bands']
         cols =  [f'mag_{band}_lsst{suffix}' for band in bands for suffix in suffices] 
         # We only have one set of errors, though
@@ -133,10 +137,10 @@ class PZBPZ2(PipelineStage):
         group.create_dataset("z", (nz,), dtype='f4')
         group.create_dataset("pdf", (nobj,nz), dtype='f4')
         group.create_dataset("mu", (nobj,), dtype='f4')
-        group.create_dataset("mu_1p", (nobj,), dtype='f4')
-        group.create_dataset("mu_1m", (nobj,), dtype='f4')
-        group.create_dataset("mu_2p", (nobj,), dtype='f4')
-        group.create_dataset("mu_2m", (nobj,), dtype='f4')
+        #group.create_dataset("mu_1p", (nobj,), dtype='f4')
+        #group.create_dataset("mu_1m", (nobj,), dtype='f4')
+        #group.create_dataset("mu_2p", (nobj,), dtype='f4')
+        #group.create_dataset("mu_2m", (nobj,), dtype='f4')
 
         # One processor writes the redshift axis to output.
         if self.rank==0:
@@ -156,7 +160,7 @@ class PZBPZ2(PipelineStage):
 
 
         bpz_path = self.config['path_to_bpz']
-        columns_file = '/Users/jaz/src/BPZpipe/test/CSDC2114_test.columns'
+        columns_file = self.config['columns_file']
         ignore_rows =['M_0','OTHER','ID','Z_S']
         filters = [f for f in get_str(columns_file, 0) if f not in ignore_rows]
 
@@ -183,8 +187,9 @@ class PZBPZ2(PipelineStage):
         from bpz_tools_py3 import mag2flux, e_mag2frac
 
         bands = self.config['bands']
-        suffices = ["", "_1p", "_1m", "_2p", "_2m"]
-
+        #suffices = ["", "_1p", "_1m", "_2p", "_2m"]
+        suffices = [""]
+        
         # Load the magnitudes
         zp_errors = np.array(self.config['zp_errors'])
         zp_frac=e_mag2frac(zp_errors)
@@ -210,7 +215,18 @@ class PZBPZ2(PipelineStage):
             # Check which is which here, to use with the ZP errors below
             seen1 = (flux > 0) & (flux_err > 0)
             seen = np.where(seen1)
-            unseen = np.where(~seen1)
+            #unseen = np.where(~seen1)
+            #replace Joe's definition with more standard BPZ style
+            nondetect = 99.
+            nondetflux = 10.**(-0.4*nondetect)
+            unseen = np.isclose(flux,nondetflux,atol=nondetflux*0.5)
+
+            #replace mag = 99 values with 0 flux and 1 sigma limiting magnitude
+            #value, which is stored in the mag_errs column for non-detects
+            #NOTE: We should check that this same convention will be used in
+            #LSST, or change how we handle non-detects here!
+            flux[unseen] = 0.
+            flux_err[unseen]= 10.**(-0.4*np.abs(mag_errs[unseen]))
 
             # Add zero point magnitude errors.
             # In the case that the object is detected, this
@@ -258,7 +274,8 @@ class PZBPZ2(PipelineStage):
         point_estimator = self.config['point_estimate']
 
         # Metacal variants
-        suffices = ["", "_1p", "_1m", "_2p", "_2m"]
+        #suffices = ["", "_1p", "_1m", "_2p", "_2m"]
+        suffices = [""]
         for s, suffix in enumerate(suffices):
             for i in range(ng):
                 # Pull out the rows of data for this galaxy
@@ -356,10 +373,10 @@ class PZBPZ2(PipelineStage):
         group = output_file['pdf']
         group['pdf'][start:end] = pdfs
         group['mu'][start:end] = point_estimates[0]
-        group['mu_1p'][start:end] = point_estimates[1]
-        group['mu_1m'][start:end] = point_estimates[2]
-        group['mu_2p'][start:end] = point_estimates[3]
-        group['mu_2m'][start:end] = point_estimates[4]
+        #group['mu_1p'][start:end] = point_estimates[1]
+        #group['mu_1m'][start:end] = point_estimates[2]
+        #group['mu_2p'][start:end] = point_estimates[3]
+        #group['mu_2m'][start:end] = point_estimates[4]
 
 
 

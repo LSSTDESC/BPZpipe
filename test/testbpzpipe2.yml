@@ -1,0 +1,18 @@
+
+launcher: local
+
+modules: bpzpipe
+
+stages:
+  - name: PZBPZ2
+    nprocess: 1
+
+output_dir: ./outputs
+
+inputs:
+    photometry_catalog: test/test1000_h5pyfmt_new.h5
+
+resume: False
+log_dir: ./test/logs
+pipeline_log: ./test/log.txt
+config: test/config.yml

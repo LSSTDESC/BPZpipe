@@ -1,0 +1,8 @@
+# This is an example configuration file
+BPZpipeStage1:
+  INTERP: 0  # this will take a default value of "0" if not set here
+  OUTPUT_CUT: "Null" #setting this to a float will only compute photo-z's for gals with M_0<OUTPUT_CUT
+  param_file: test/test.pars
+  path_to_bpz: /global/projecta/projectdirs/lsst/groups/PZ/BPZ/BPZpy3/pz_pdf/pz/BPZ
+  photoz_pointfile: test.bpz.h5
+  photoz_probsfile: test_probs.h5
