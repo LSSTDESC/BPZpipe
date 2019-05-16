@@ -56,7 +56,8 @@ class PZBPZ2(PipelineStage):
         cols =  [f'mag_{band}_lsst{suffix}' for band in bands for suffix in suffices] 
         # We only have one set of errors, though
         cols += [f'mag_err_{band}_lsst' for band in bands]
-
+        cols += ["id"]
+        
         # Prepare the output HDF5 file
         output_file = self.prepare_output(z)
 
@@ -123,7 +124,8 @@ class PZBPZ2(PipelineStage):
 
         # Work out how much space we will need.
         cat = self.open_input("photometry_catalog")
-        nobj = cat['photometry/id'].size
+        ids = np.array(cat['photometry/id'])
+        nobj = ids.size
         cat.close()
 
         # Open the output file.
@@ -133,26 +135,27 @@ class PZBPZ2(PipelineStage):
 
         # Create the space for output data
         nz = len(z)
+        groupid = f.create_group('id')
+        groupid.create_dataset('galaxy_id', (nobj,), dtype = 'i8')
+        grouppt = f.create_group('point_estimates')
+        grouppt.create_dataset('z_mode', (nobj,), dtype='f4')
+        grouppt.create_dataset('z_mean', (nobj,), dtype='f4')
+        grouppt.create_dataset('z_median', (nobj,), dtype='f4')
         group = f.create_group('pdf')
-        group.create_dataset("z", (nz,), dtype='f4')
+        group.create_dataset("zgrid", (nz,), dtype='f4')
         group.create_dataset("pdf", (nobj,nz), dtype='f4')
-        group.create_dataset("mu", (nobj,), dtype='f4')
-        #group.create_dataset("mu_1p", (nobj,), dtype='f4')
-        #group.create_dataset("mu_1m", (nobj,), dtype='f4')
-        #group.create_dataset("mu_2p", (nobj,), dtype='f4')
-        #group.create_dataset("mu_2m", (nobj,), dtype='f4')
 
         # One processor writes the redshift axis to output.
         if self.rank==0:
-            group['z'][:] = z
-
+            group['zgrid'][:] = z
+            groupid['galaxy_id'][:] = ids
         return f
 
     def load_templates(self):
         from useful_py3 import get_str, get_data, match_resol
 
 
-        # The reshift range we will evaluate on
+        # The redshift range we will evaluate on
         zmin = self.config['zmin']
         zmax = self.config['zmax']
         dz = self.config['dz']
@@ -244,6 +247,7 @@ class PZBPZ2(PipelineStage):
 
     def estimate_pdfs(self, flux_templates, z, data):
 
+        
         # BPZ uses the magnitude in one band to get a prior.
         # Select which one here.
         bands = self.config['bands']
@@ -270,8 +274,8 @@ class PZBPZ2(PipelineStage):
 
         # Space for the output
         pdfs = np.zeros((ng, nz))
-        point_estimates = np.zeros((5, ng))
-        point_estimator = self.config['point_estimate']
+        point_estimates = np.zeros((3, ng))
+#        point_estimator = self.config['point_estimate']
 
         # Metacal variants
         #suffices = ["", "_1p", "_1m", "_2p", "_2m"]
@@ -288,19 +292,20 @@ class PZBPZ2(PipelineStage):
                 
                 if suffix=="":
                     pdfs[i] = pdf
-
-                if point_estimator == 'mean':
-                    # The pdf already sums to unity, so this gives us the mean
-                    point_estimates[s, i] = (pdf * z).sum()
-                elif point_estimator == 'mode':
-                    # This is the BPZ default
-                    point_estimates[s, i] = z[np.argmax(pdf)]
-                elif point_estimator == 'median':
-                    # Just for completeness, not idea if sensible. Defined below
-                    point_estimates[s, i] = pdf_median(z, pdf)
-                else:
-                    raise ValueError(f"Unknown value for point_estimate parameter"
-                        f"'{point_estimator}' - should be 'mean', 'mode', or 'median'")
+                
+                #Remove selector and compute all three point est. variants to store
+                #if point_estimator == 'mean':
+                # The pdf already sums to unity, so this gives us the mean
+                point_estimates[0, i] = (pdf * z).sum()
+                #elif point_estimator == 'mode':
+                # This is the BPZ default
+                point_estimates[1, i] = z[np.argmax(pdf)]
+                #elif point_estimator == 'median':
+                # Just for completeness, not idea if sensible. Defined below
+                point_estimates[2, i] = pdf_median(z, pdf)
+                #else:
+                #    raise ValueError(f"Unknown value for point_estimate parameter"
+                #        f"'{point_estimator}' - should be 'mean', 'mode', or 'median'")
 
 
 
@@ -366,19 +371,17 @@ class PZBPZ2(PipelineStage):
         pdfs: array of shape (n_chunk, n_z)
             The output PDF values
 
-        point_estimates: array of shape (5, n_chunk)
+        point_estimates: array of shape (3, n_chunk)
             Point-estimated photo-zs for each of the 5 metacalibrated variants
 
         """
         group = output_file['pdf']
         group['pdf'][start:end] = pdfs
-        group['mu'][start:end] = point_estimates[0]
-        #group['mu_1p'][start:end] = point_estimates[1]
-        #group['mu_1m'][start:end] = point_estimates[2]
-        #group['mu_2p'][start:end] = point_estimates[3]
-        #group['mu_2m'][start:end] = point_estimates[4]
-
-
+        grouppt = output_file['point_estimates']
+        grouppt['z_mean'][start:end] = point_estimates[0]
+        grouppt['z_mode'][start:end] = point_estimates[1]
+        grouppt['z_median'][start:end] = point_estimates[2]
+        
 
 
 def pdf_median(z, p):
