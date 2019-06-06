@@ -4,6 +4,7 @@ from descformats import TextFile, HDFFile, YamlFile
 import os
 import sys
 import numpy as np
+import time
 
 # This class runs the python3 version of BPZ from the command line
 class PZBPZ2(PipelineStage):
@@ -37,11 +38,16 @@ class PZBPZ2(PipelineStage):
         "sigma_g": 0.03,  # use sigma_g <= 0 for no convolution
         "chunk_rows": 100,
         "mag_err_min": 1e-3,
-        "point_estimate": "mode",  # mean, mode, or median
+        "sigma_intrins": 0.05, #"intrinsic" assumed scatter, used in ODDS
+        "odds_int": 0.99445, #number of sigma_intrins to integrate +/- around peak
+        # note that 1.95993 is the number of sigma you get for old "ODDS" =0.95 
+        #in old BPZ, 0.68 is 0.99445
+        #"point_estimate": "mode",  # mean, mode, or median
     }
 
     def run(self):
-
+        
+        starttime = time.time()
         self.setup_bpz()
 
 
@@ -83,7 +89,8 @@ class PZBPZ2(PipelineStage):
         # Synchronize processors
         if self.is_mpi():
             self.comm.Barrier()
-
+        endtime = time.time()
+        print(f"finished, took {endtime - starttime} seconds")
 
     def setup_bpz(self):
         bpz_path = self.config['path_to_bpz']
@@ -93,6 +100,11 @@ class PZBPZ2(PipelineStage):
 
         #BPZ is so old that it has some leftover references to NUMERIX
         os.environ["NUMERIX"]="numpy"
+
+        #need to set the env. variable to set up cori for mpi
+        os.environ["CECI_SETUP"]="/global/projecta/projectdirs/lsst/groups/PZ/BPZ/BPZpipe/test/setup-cori-test"
+        os.environ["HDF5_USE_FILE_LOCKING"]="FALSE"
+        
 
         # We will import from BPZ in a moment.
         sys.path.append(bpz_path)
@@ -141,6 +153,7 @@ class PZBPZ2(PipelineStage):
         grouppt.create_dataset('z_mode', (nobj,), dtype='f4')
         grouppt.create_dataset('z_mean', (nobj,), dtype='f4')
         grouppt.create_dataset('z_median', (nobj,), dtype='f4')
+        grouppt.create_dataset('ODDS', (nobj,), dtype = 'f4')
         group = f.create_group('pdf')
         group.create_dataset("zgrid", (nz,), dtype='f4')
         group.create_dataset("pdf", (nobj,nz), dtype='f4')
@@ -274,7 +287,7 @@ class PZBPZ2(PipelineStage):
 
         # Space for the output
         pdfs = np.zeros((ng, nz))
-        point_estimates = np.zeros((3, ng))
+        point_estimates = np.zeros((4, ng))
 #        point_estimator = self.config['point_estimate']
 
         # Metacal variants
@@ -307,11 +320,33 @@ class PZBPZ2(PipelineStage):
                 #    raise ValueError(f"Unknown value for point_estimate parameter"
                 #        f"'{point_estimator}' - should be 'mean', 'mode', or 'median'")
 
-
-
+                point_estimates[3,i] = self.calculate_odds(z, point_estimates[1,i], pdf)
+                
         # Return full set
         return point_estimates, pdfs
 
+    def calculate_odds(self, z, zb, pdf):
+        """
+        calculates the integrated pdf between -N*sigma_intrins and +N*sigma_intrins
+        around the mode of the PDF, zb
+        parameters: 
+          -sigma_intrins: intrinsic scatter of distn, read in from config 
+          -odds_int: number of sigma_intrins to multiply by to define interval
+          (read in from config)
+          -z : redshift grid of pdf
+          -pdf: posterior redshift estimate
+          -zb: mode of posterior
+        """
+        cumpdf = np.cumsum(pdf)
+        zo1 = zb - self.config['sigma_intrins']*self.config['odds_int']*(1.+zb)
+        zo2 = zb + self.config['sigma_intrins']*self.config['odds_int']*(1.+zb)
+        i1 = np.searchsorted(z,zo1)-1
+        i2 = np.searchsorted(z,zo2)
+        if i1<0:
+            return cumpdf[i2]/cumpdf[-1]
+        if i2>len(z)-1:
+            return 1. - cumpdf[i1]/cumpdf[-1]
+        return(cumpdf[i2]-cumpdf[i1])/cumpdf[-1]
 
 
     def estimate_pdf(self, flux_templates, kernel, flux, flux_err, mag_0, z):
@@ -381,7 +416,7 @@ class PZBPZ2(PipelineStage):
         grouppt['z_mean'][start:end] = point_estimates[0]
         grouppt['z_mode'][start:end] = point_estimates[1]
         grouppt['z_median'][start:end] = point_estimates[2]
-        
+        grouppt['ODDS'][start:end] = point_estimates[3]
 
 
 def pdf_median(z, p):

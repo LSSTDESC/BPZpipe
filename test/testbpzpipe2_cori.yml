@@ -1,0 +1,18 @@
+
+launcher: cori
+
+modules: bpzpipe
+
+stages:
+  - name: PZBPZ2
+    nprocess: 2
+
+output_dir: ./outputs
+
+inputs:
+    photometry_catalog: /global/projecta/projectdirs/lsst/groups/PZ/BPZ/BPZpipe/test/test1000_h5pyfmt_new.h5
+
+resume: False
+log_dir: ./test/logs
+pipeline_log: ./test/log.txt
+config: test/config.yml
