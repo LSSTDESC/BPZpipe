@@ -8,3 +8,7 @@ BPZpipeStage1:
 PZBPZ2:
   path_to_bpz: /global/projecta/projectdirs/lsst/groups/PZ/BPZ/BPZpy3/pz_pdf/pz/BPZ
   columns_file: /global/projecta/projectdirs/lsst/groups/PZ/BPZ/BPZpipe/test/CSDC2114_test.columns
+
+BPZ_pz_pdf:
+  path_to_bpz: /global/projecta/projectdirs/lsst/groups/PZ/BPZ/BPZpy3/pz_pdf/pz/BPZ
+  columns_file: /global/projecta/projectdirs/lsst/groups/PZ/BPZ/BPZpipe/test/CSDC2114_test.columns
