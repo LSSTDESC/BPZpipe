@@ -345,15 +345,18 @@ class BPZ_pz_pdf(PipelineStage):
           -zb: mode of posterior
         """
         cumpdf = np.cumsum(pdf)
-        zo1 = zb - self.config['sigma_intrins']*self.config['odds_int']*(1.+zb)
-        zo2 = zb + self.config['sigma_intrins']*self.config['odds_int']*(1.+zb)
-        i1 = np.searchsorted(z,zo1)-1
-        i2 = np.searchsorted(z,zo2)
-        if i1<0:
-            return cumpdf[i2]/cumpdf[-1]
-        if i2>len(z)-1:
-            return 1. - cumpdf[i1]/cumpdf[-1]
-        return(cumpdf[i2]-cumpdf[i1])/cumpdf[-1]
+        if np.isclose(cumpdf[-1],0.0):
+            return 0.0
+        else:
+            zo1 = zb - self.config['sigma_intrins']*self.config['odds_int']*(1.+zb)
+            zo2 = zb + self.config['sigma_intrins']*self.config['odds_int']*(1.+zb)
+            i1 = np.searchsorted(z,zo1)-1
+            i2 = np.searchsorted(z,zo2)
+            if i1<0:
+                return cumpdf[i2]/cumpdf[-1]
+            if i2>len(z)-1:
+                return 1. - cumpdf[i1]/cumpdf[-1]
+            return(cumpdf[i2]-cumpdf[i1])/cumpdf[-1]
 
 
     def estimate_pdf(self, flux_templates, kernel, flux, flux_err, mag_0, z):
@@ -380,6 +383,8 @@ class BPZ_pz_pdf(PipelineStage):
         # Time for everyone's favourite Theorem!
         post = L * P
         
+
+        
         # Right now we jave the joint PDF of p(z,template). Marginalize
         # over the templates to just get p(z)
         post_z = post.sum(axis=1)
@@ -394,7 +399,11 @@ class BPZ_pz_pdf(PipelineStage):
         post_z[post_z < (p_max * p_min)] = 0
 
         # Normalize in the same way that BPZ does
-        post_z /= post_z.sum()
+        #But, only normalize if the elements don't sum to zero
+        #if they are all zero, just leave p(z) as all zeros, as no templates
+        #are a good fit.
+        if not np.isclose(post_z.sum(),0.0):
+            post_z /= post_z.sum()
         
         # And all done
         return post_z,zb_ml,reduced_chi_ml
@@ -437,6 +446,10 @@ class BPZ_pz_pdf(PipelineStage):
 def pdf_median(z, p):
     psum = p.sum()
     cdf = np.cumsum(p)
-    cdf = np.concatenate([[0.0], cdf])
-    i = np.where(cdf<psum/2.0)[0].max()
-    return z[i]
+    if np.isclose(psum,0.0):
+        #print("problem with p(z), forcing to 0.0")
+        return 0.0
+    else:
+        cdf = np.concatenate([[0.0], cdf])
+        i = np.where(cdf<psum/2.0)[0].max()
+        return z[i]
