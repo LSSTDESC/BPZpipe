@@ -1,10 +1,9 @@
 from ceci import PipelineStage
 from descformats import TextFile, HDFFile, YamlFile
-#from txpipe.data_types import PhotozPDFFile
+from txpipe.data_types import PhotozPDFFile
 import os
 import sys
 import numpy as np
-import time
 
 # This class runs the python3 version of BPZ from the command line
 class PZBPZ2(PipelineStage):
@@ -17,9 +16,7 @@ class PZBPZ2(PipelineStage):
         ('photometry_catalog', HDFFile),
     ]
     outputs = [
-#        ('photoz_pdfs', PhotozPDFFile),
-        ('photoz_pdfs', HDFFile),
-
+        ('photoz_pdfs', PhotozPDFFile),
     ]
     config_options = {
         "path_to_bpz": str,
@@ -29,7 +26,6 @@ class PZBPZ2(PipelineStage):
         "interp": 0,
         "prior_file": 'dc2v4_PCA_cosmodc2v114_py3',
         "spectra_file": 'SED/dc2_PCAsortedtemplates_v4.list',
-        "columns_file": 'test/CSDC2114_test.columns',
         "ab_dir" : "AB",
         "bands" : "ugrizy",
         "zp_errors": [0.01, 0.01, 0.01, 0.01, 0.01, 0.01],
@@ -38,16 +34,11 @@ class PZBPZ2(PipelineStage):
         "sigma_g": 0.03,  # use sigma_g <= 0 for no convolution
         "chunk_rows": 100,
         "mag_err_min": 1e-3,
-        "sigma_intrins": 0.05, #"intrinsic" assumed scatter, used in ODDS
-        "odds_int": 0.99445, #number of sigma_intrins to integrate +/- around peak
-        # note that 1.95993 is the number of sigma you get for old "ODDS" =0.95 
-        #in old BPZ, 0.68 is 0.99445
-        #"point_estimate": "mode",  # mean, mode, or median
+        "point_estimate": "mode",  # mean, mode, or median
     }
 
     def run(self):
-        
-        starttime = time.time()
+
         self.setup_bpz()
 
 
@@ -56,14 +47,12 @@ class PZBPZ2(PipelineStage):
 
         # Columns we will need from the data
         # Note that we need all the metacalibrated variants too.
-        #suffices = ["", "_1p", "_1m", "_2p", "_2m"]
-        suffices = [""]
+        suffices = ["", "_1p", "_1m", "_2p", "_2m"]
         bands = self.config['bands']
         cols =  [f'mag_{band}_lsst{suffix}' for band in bands for suffix in suffices] 
         # We only have one set of errors, though
         cols += [f'mag_err_{band}_lsst' for band in bands]
-        cols += ["id"]
-        
+
         # Prepare the output HDF5 file
         output_file = self.prepare_output(z)
 
@@ -89,8 +78,7 @@ class PZBPZ2(PipelineStage):
         # Synchronize processors
         if self.is_mpi():
             self.comm.Barrier()
-        endtime = time.time()
-        print(f"finished, took {endtime - starttime} seconds")
+
 
     def setup_bpz(self):
         bpz_path = self.config['path_to_bpz']
@@ -100,11 +88,6 @@ class PZBPZ2(PipelineStage):
 
         #BPZ is so old that it has some leftover references to NUMERIX
         os.environ["NUMERIX"]="numpy"
-
-        #need to set the env. variable to set up cori for mpi
-        os.environ["CECI_SETUP"]="/global/projecta/projectdirs/lsst/groups/PZ/BPZ/BPZpipe/test/setup-cori-test"
-        os.environ["HDF5_USE_FILE_LOCKING"]="FALSE"
-        
 
         # We will import from BPZ in a moment.
         sys.path.append(bpz_path)
@@ -136,8 +119,7 @@ class PZBPZ2(PipelineStage):
 
         # Work out how much space we will need.
         cat = self.open_input("photometry_catalog")
-        ids = np.array(cat['photometry/id'])
-        nobj = ids.size
+        nobj = cat['photometry/id'].size
         cat.close()
 
         # Open the output file.
@@ -147,28 +129,26 @@ class PZBPZ2(PipelineStage):
 
         # Create the space for output data
         nz = len(z)
-        groupid = f.create_group('id')
-        groupid.create_dataset('galaxy_id', (nobj,), dtype = 'i8')
-        grouppt = f.create_group('point_estimates')
-        grouppt.create_dataset('z_mode', (nobj,), dtype='f4')
-        grouppt.create_dataset('z_mean', (nobj,), dtype='f4')
-        grouppt.create_dataset('z_median', (nobj,), dtype='f4')
-        grouppt.create_dataset('ODDS', (nobj,), dtype = 'f4')
         group = f.create_group('pdf')
-        group.create_dataset("zgrid", (nz,), dtype='f4')
+        group.create_dataset("z", (nz,), dtype='f4')
         group.create_dataset("pdf", (nobj,nz), dtype='f4')
+        group.create_dataset("mu", (nobj,), dtype='f4')
+        group.create_dataset("mu_1p", (nobj,), dtype='f4')
+        group.create_dataset("mu_1m", (nobj,), dtype='f4')
+        group.create_dataset("mu_2p", (nobj,), dtype='f4')
+        group.create_dataset("mu_2m", (nobj,), dtype='f4')
 
         # One processor writes the redshift axis to output.
         if self.rank==0:
-            group['zgrid'][:] = z
-            groupid['galaxy_id'][:] = ids
+            group['z'][:] = z
+
         return f
 
     def load_templates(self):
         from useful_py3 import get_str, get_data, match_resol
 
 
-        # The redshift range we will evaluate on
+        # The reshift range we will evaluate on
         zmin = self.config['zmin']
         zmax = self.config['zmax']
         dz = self.config['dz']
@@ -176,7 +156,7 @@ class PZBPZ2(PipelineStage):
 
 
         bpz_path = self.config['path_to_bpz']
-        columns_file = self.config['columns_file']
+        columns_file = '/Users/jaz/src/BPZpipe/test/CSDC2114_test.columns'
         ignore_rows =['M_0','OTHER','ID','Z_S']
         filters = [f for f in get_str(columns_file, 0) if f not in ignore_rows]
 
@@ -203,9 +183,8 @@ class PZBPZ2(PipelineStage):
         from bpz_tools_py3 import mag2flux, e_mag2frac
 
         bands = self.config['bands']
-        #suffices = ["", "_1p", "_1m", "_2p", "_2m"]
-        suffices = [""]
-        
+        suffices = ["", "_1p", "_1m", "_2p", "_2m"]
+
         # Load the magnitudes
         zp_errors = np.array(self.config['zp_errors'])
         zp_frac=e_mag2frac(zp_errors)
@@ -231,18 +210,7 @@ class PZBPZ2(PipelineStage):
             # Check which is which here, to use with the ZP errors below
             seen1 = (flux > 0) & (flux_err > 0)
             seen = np.where(seen1)
-            #unseen = np.where(~seen1)
-            #replace Joe's definition with more standard BPZ style
-            nondetect = 99.
-            nondetflux = 10.**(-0.4*nondetect)
-            unseen = np.isclose(flux,nondetflux,atol=nondetflux*0.5)
-
-            #replace mag = 99 values with 0 flux and 1 sigma limiting magnitude
-            #value, which is stored in the mag_errs column for non-detects
-            #NOTE: We should check that this same convention will be used in
-            #LSST, or change how we handle non-detects here!
-            flux[unseen] = 0.
-            flux_err[unseen]= 10.**(-0.4*np.abs(mag_errs[unseen]))
+            unseen = np.where(~seen1)
 
             # Add zero point magnitude errors.
             # In the case that the object is detected, this
@@ -260,7 +228,6 @@ class PZBPZ2(PipelineStage):
 
     def estimate_pdfs(self, flux_templates, z, data):
 
-        
         # BPZ uses the magnitude in one band to get a prior.
         # Select which one here.
         bands = self.config['bands']
@@ -287,12 +254,11 @@ class PZBPZ2(PipelineStage):
 
         # Space for the output
         pdfs = np.zeros((ng, nz))
-        point_estimates = np.zeros((4, ng))
-#        point_estimator = self.config['point_estimate']
+        point_estimates = np.zeros((5, ng))
+        point_estimator = self.config['point_estimate']
 
         # Metacal variants
-        #suffices = ["", "_1p", "_1m", "_2p", "_2m"]
-        suffices = [""]
+        suffices = ["", "_1p", "_1m", "_2p", "_2m"]
         for s, suffix in enumerate(suffices):
             for i in range(ng):
                 # Pull out the rows of data for this galaxy
@@ -305,48 +271,25 @@ class PZBPZ2(PipelineStage):
                 
                 if suffix=="":
                     pdfs[i] = pdf
-                
-                #Remove selector and compute all three point est. variants to store
-                #if point_estimator == 'mean':
-                # The pdf already sums to unity, so this gives us the mean
-                point_estimates[0, i] = (pdf * z).sum()
-                #elif point_estimator == 'mode':
-                # This is the BPZ default
-                point_estimates[1, i] = z[np.argmax(pdf)]
-                #elif point_estimator == 'median':
-                # Just for completeness, not idea if sensible. Defined below
-                point_estimates[2, i] = pdf_median(z, pdf)
-                #else:
-                #    raise ValueError(f"Unknown value for point_estimate parameter"
-                #        f"'{point_estimator}' - should be 'mean', 'mode', or 'median'")
 
-                point_estimates[3,i] = self.calculate_odds(z, point_estimates[1,i], pdf)
-                
+                if point_estimator == 'mean':
+                    # The pdf already sums to unity, so this gives us the mean
+                    point_estimates[s, i] = (pdf * z).sum()
+                elif point_estimator == 'mode':
+                    # This is the BPZ default
+                    point_estimates[s, i] = z[np.argmax(pdf)]
+                elif point_estimator == 'median':
+                    # Just for completeness, not idea if sensible. Defined below
+                    point_estimates[s, i] = pdf_median(z, pdf)
+                else:
+                    raise ValueError(f"Unknown value for point_estimate parameter"
+                        f"'{point_estimator}' - should be 'mean', 'mode', or 'median'")
+
+
+
         # Return full set
         return point_estimates, pdfs
 
-    def calculate_odds(self, z, zb, pdf):
-        """
-        calculates the integrated pdf between -N*sigma_intrins and +N*sigma_intrins
-        around the mode of the PDF, zb
-        parameters: 
-          -sigma_intrins: intrinsic scatter of distn, read in from config 
-          -odds_int: number of sigma_intrins to multiply by to define interval
-          (read in from config)
-          -z : redshift grid of pdf
-          -pdf: posterior redshift estimate
-          -zb: mode of posterior
-        """
-        cumpdf = np.cumsum(pdf)
-        zo1 = zb - self.config['sigma_intrins']*self.config['odds_int']*(1.+zb)
-        zo2 = zb + self.config['sigma_intrins']*self.config['odds_int']*(1.+zb)
-        i1 = np.searchsorted(z,zo1)-1
-        i2 = np.searchsorted(z,zo2)
-        if i1<0:
-            return cumpdf[i2]/cumpdf[-1]
-        if i2>len(z)-1:
-            return 1. - cumpdf[i1]/cumpdf[-1]
-        return(cumpdf[i2]-cumpdf[i1])/cumpdf[-1]
 
 
     def estimate_pdf(self, flux_templates, kernel, flux, flux_err, mag_0, z):
@@ -406,17 +349,19 @@ class PZBPZ2(PipelineStage):
         pdfs: array of shape (n_chunk, n_z)
             The output PDF values
 
-        point_estimates: array of shape (3, n_chunk)
+        point_estimates: array of shape (5, n_chunk)
             Point-estimated photo-zs for each of the 5 metacalibrated variants
 
         """
         group = output_file['pdf']
         group['pdf'][start:end] = pdfs
-        grouppt = output_file['point_estimates']
-        grouppt['z_mean'][start:end] = point_estimates[0]
-        grouppt['z_mode'][start:end] = point_estimates[1]
-        grouppt['z_median'][start:end] = point_estimates[2]
-        grouppt['ODDS'][start:end] = point_estimates[3]
+        group['mu'][start:end] = point_estimates[0]
+        group['mu_1p'][start:end] = point_estimates[1]
+        group['mu_1m'][start:end] = point_estimates[2]
+        group['mu_2p'][start:end] = point_estimates[3]
+        group['mu_2m'][start:end] = point_estimates[4]
+
+
 
 
 def pdf_median(z, p):
