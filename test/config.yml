@@ -12,3 +12,7 @@ PZBPZ2:
 BPZ_pz_pdf:
   path_to_bpz: /global/projecta/projectdirs/lsst/groups/PZ/BPZ/BPZpy3/pz_pdf/pz/BPZ
   columns_file: /global/projecta/projectdirs/lsst/groups/PZ/BPZ/BPZpipe/test/CSDC2114_test.columns
+  chunk_rows: 1000
+  zmax: 3.005
+  metacal_fluxes: False
+  

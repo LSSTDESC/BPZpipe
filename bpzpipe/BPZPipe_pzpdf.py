@@ -23,6 +23,7 @@ class BPZ_pz_pdf(PipelineStage):
     ]
     config_options = {
         "path_to_bpz": str,
+        "metacal_fluxes": False, #if true, sets suffices to metacal variants   
         "dz":   0.01,
         "zmin": 0.005,
         "zmax": 3.505,
@@ -56,8 +57,12 @@ class BPZ_pz_pdf(PipelineStage):
 
         # Columns we will need from the data
         # Note that we need all the metacalibrated variants too.
-        #suffices = ["", "_1p", "_1m", "_2p", "_2m"]
-        suffices = [""]
+        metacal_fluxes = self.config['metacal_fluxes']
+        if metacal_fluxes == False:
+            suffices = [""]
+        else:
+            suffices = ["", "_1p", "_1m", "_2p", "_2m"]
+        self.suffices = suffices 
         bands = self.config['bands']
         cols =  [f'mag_{band}_lsst{suffix}' for band in bands for suffix in suffices] 
         # We only have one set of errors, though
@@ -102,7 +107,7 @@ class BPZ_pz_pdf(PipelineStage):
         os.environ["NUMERIX"]="numpy"
 
         #need to set the env. variable to set up cori for mpi
-        os.environ["CECI_SETUP"]="/global/projecta/projectdirs/lsst/groups/PZ/BPZ/BPZpipe/test/setup-cori-test"
+        os.environ["CECI_SETUP"]="/global/projecta/projectdirs/lsst/groups/PZ/BPZ/BPZpipe/test/setup-cori-update"
         os.environ["HDF5_USE_FILE_LOCKING"]="FALSE"
         
 
@@ -205,8 +210,8 @@ class BPZ_pz_pdf(PipelineStage):
         from bpz_tools_py3 import mag2flux, e_mag2frac
 
         bands = self.config['bands']
-        #suffices = ["", "_1p", "_1m", "_2p", "_2m"]
-        suffices = [""]
+        ##suffices = ["", "_1p", "_1m", "_2p", "_2m"]
+        #suffices = [""]
         
         # Load the magnitudes
         zp_errors = np.array(self.config['zp_errors'])
@@ -216,7 +221,7 @@ class BPZ_pz_pdf(PipelineStage):
         mag_errs = np.array([data[f'mag_err_{b}_lsst'] for b in bands]).T
 
         # But many sets of mags, for now
-        for suffix in suffices:
+        for suffix in self.suffices:
             # Group the magnitudes and errors into one big array
             mags = np.array([data[f'mag_{b}_lsst{suffix}'] for b in bands]).T
 
@@ -294,9 +299,9 @@ class BPZ_pz_pdf(PipelineStage):
 #        point_estimator = self.config['point_estimate']
 
         # Metacal variants
-        #suffices = ["", "_1p", "_1m", "_2p", "_2m"]
-        suffices = [""]
-        for s, suffix in enumerate(suffices):
+        ##suffices = ["", "_1p", "_1m", "_2p", "_2m"]
+        #suffices = [""]
+        for s, suffix in enumerate(self.suffices):
             for i in range(ng):
                 # Pull out the rows of data for this galaxy
                 mag_0 = data[f'mags{suffix}'][i, m_0_col]
@@ -304,30 +309,39 @@ class BPZ_pz_pdf(PipelineStage):
                 flux_err = data[f'flux_err{suffix}'][i]
 
                 # and compute the PDF for it
-                pdf,zb_ml,red_chi_ml = self.estimate_pdf(flux_templates, kernel, 
-                                                         flux, flux_err, mag_0, z)
+                pdf,zb_ml,red_chi_ml = self.estimate_pdf(flux_templates,
+                                                         kernel, 
+                                                         flux, flux_err,
+                                                         mag_0, z)
                 
                 if suffix=="":
                     pdfs[i] = pdf
                 
-                #Remove selector and compute all three point est. variants to store
-                #if point_estimator == 'mean':
-                # The pdf already sums to unity, so this gives us the mean
-                point_estimates[0, i] = (pdf * z).sum()
-                #elif point_estimator == 'mode':
-                # This is the BPZ default
-                point_estimates[1, i] = z[np.argmax(pdf)]
-                #elif point_estimator == 'median':
-                # Just for completeness, not idea if sensible. Defined below
-                point_estimates[2, i] = pdf_median(z, pdf)
-                #else:
-                #    raise ValueError(f"Unknown value for point_estimate parameter"
-                #        f"'{point_estimator}' - should be 'mean', 'mode', or 'median'")
+                    #Remove selector and compute all three point est.
+                    #variants to store
+                    #if point_estimator == 'mean':
+                    # The pdf already sums to unity, so this gives us the mean
+                    point_estimates[0, i] = (pdf * z).sum()
+                    #elif point_estimator == 'mode':
+                    # This is the BPZ default
+                    point_estimates[1, i] = z[np.argmax(pdf)]
+                    #elif point_estimator == 'median':
+                    # Just for completeness, not idea if sensible. Defined\
+                    #below
+                    point_estimates[2, i] = pdf_median(z, pdf)
+                    #else:
+                    #    raise ValueError(f"Unknown value for point_estimate\
+                    #parameter"
+                    #        f"'{point_estimator}' - should be 'mean', 'mode'\,
+                    #or 'median'")
 
-                point_estimates[3,i] = self.calculate_odds(z, point_estimates[1,i], pdf)
-                #tack on the max likelihood point redshift (pre-prior) and reduced chi^2
-                point_estimates[4,i] = zb_ml
-                point_estimates[5,i] = red_chi_ml
+                    point_estimates[3,i] = self.calculate_odds(z,
+                                                               point_estimates[1,i],
+                                                               pdf)
+                    #tack on the max likelihood point redshift (pre-prior) \
+                    #and reduced chi^2
+                    point_estimates[4,i] = zb_ml
+                    point_estimates[5,i] = red_chi_ml
                 
         # Return full set
         return point_estimates, pdfs
