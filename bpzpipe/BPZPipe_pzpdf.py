@@ -62,6 +62,7 @@ class BPZ_pz_pdf(PipelineStage):
             suffices = [""]
         else:
             suffices = ["", "_1p", "_1m", "_2p", "_2m"]
+            #suffices = ["","_1p", "_1m"]
         self.suffices = suffices 
         bands = self.config['bands']
         cols =  [f'mag_{band}_lsst{suffix}' for band in bands for suffix in suffices] 
@@ -144,7 +145,7 @@ class BPZ_pz_pdf(PipelineStage):
         ids = np.array(cat['photometry/id'])
         nobj = ids.size
         cat.close()
-
+        
         # Open the output file.
         # This will automatically open using the HDF5 mpi-io driver 
         # if we are running under MPI and the output type is parallel
@@ -155,12 +156,13 @@ class BPZ_pz_pdf(PipelineStage):
         groupid = f.create_group('id')
         groupid.create_dataset('galaxy_id', (nobj,), dtype = 'i8')
         grouppt = f.create_group('point_estimates')
-        grouppt.create_dataset('z_mode', (nobj,), dtype='f4')
-        grouppt.create_dataset('z_mean', (nobj,), dtype='f4')
-        grouppt.create_dataset('z_median', (nobj,), dtype='f4')
-        grouppt.create_dataset('ODDS', (nobj,), dtype = 'f4')
-        grouppt.create_dataset('z_mode_ml', (nobj,), dtype= 'f4')
-        grouppt.create_dataset('z_mode_ml_red_chi2', (nobj,), dtype='f4')
+        for suffix in self.suffices:
+            grouppt.create_dataset(f'z_mode{suffix}', (nobj,), dtype='f4')
+            grouppt.create_dataset(f'z_mean{suffix}', (nobj,), dtype='f4')
+            grouppt.create_dataset(f'z_median{suffix}', (nobj,), dtype='f4')
+            grouppt.create_dataset(f'ODDS{suffix}', (nobj,), dtype = 'f4')
+            grouppt.create_dataset(f'z_mode_ml{suffix}', (nobj,), dtype= 'f4')
+            grouppt.create_dataset(f'z_mode_ml_red_chi2{suffix}', (nobj,), dtype='f4')
         group = f.create_group('pdf')
         group.create_dataset("zgrid", (nz,), dtype='f4')
         group.create_dataset("pdf", (nobj,nz), dtype='f4')
@@ -295,7 +297,8 @@ class BPZ_pz_pdf(PipelineStage):
 
         # Space for the output
         pdfs = np.zeros((ng, nz))
-        point_estimates = np.zeros((6, ng))
+        num_suffices = len(self.suffices)
+        point_estimates = np.zeros((6*num_suffices, ng))
 #        point_estimator = self.config['point_estimate']
 
         # Metacal variants
@@ -317,31 +320,31 @@ class BPZ_pz_pdf(PipelineStage):
                 if suffix=="":
                     pdfs[i] = pdf
                 
-                    #Remove selector and compute all three point est.
-                    #variants to store
-                    #if point_estimator == 'mean':
-                    # The pdf already sums to unity, so this gives us the mean
-                    point_estimates[0, i] = (pdf * z).sum()
-                    #elif point_estimator == 'mode':
-                    # This is the BPZ default
-                    point_estimates[1, i] = z[np.argmax(pdf)]
-                    #elif point_estimator == 'median':
-                    # Just for completeness, not idea if sensible. Defined\
-                    #below
-                    point_estimates[2, i] = pdf_median(z, pdf)
-                    #else:
-                    #    raise ValueError(f"Unknown value for point_estimate\
-                    #parameter"
-                    #        f"'{point_estimator}' - should be 'mean', 'mode'\,
-                    #or 'median'")
+                #Remove selector and compute all three point est.
+                #variants to store
+                #if point_estimator == 'mean':
+                # The pdf already sums to unity, so this gives us the mean
+                point_estimates[6*s+0, i] = (pdf * z).sum()
+                #elif point_estimator == 'mode':
+                # This is the BPZ default
+                point_estimates[6*s+1, i] = z[np.argmax(pdf)]
+                #elif point_estimator == 'median':
+                # Just for completeness, not idea if sensible. Defined\
+                #below
+                point_estimates[6*s+2, i] = pdf_median(z, pdf)
+                #else:
+                #    raise ValueError(f"Unknown value for point_estimate\
+                #parameter"
+                #        f"'{point_estimator}' - should be 'mean', 'mode'\,
+                #or 'median'")
 
-                    point_estimates[3,i] = self.calculate_odds(z,
-                                                               point_estimates[1,i],
-                                                               pdf)
-                    #tack on the max likelihood point redshift (pre-prior) \
-                    #and reduced chi^2
-                    point_estimates[4,i] = zb_ml
-                    point_estimates[5,i] = red_chi_ml
+                point_estimates[6*s+3,i] = self.calculate_odds(z,
+                                                           point_estimates[1,i],
+                                                           pdf)
+                #tack on the max likelihood point redshift (pre-prior) \
+                #and reduced chi^2
+                point_estimates[6*s+4,i] = zb_ml
+                point_estimates[6*s+5,i] = red_chi_ml
                 
         # Return full set
         return point_estimates, pdfs
@@ -449,12 +452,13 @@ class BPZ_pz_pdf(PipelineStage):
         group = output_file['pdf']
         group['pdf'][start:end] = pdfs
         grouppt = output_file['point_estimates']
-        grouppt['z_mean'][start:end] = point_estimates[0]
-        grouppt['z_mode'][start:end] = point_estimates[1]
-        grouppt['z_median'][start:end] = point_estimates[2]
-        grouppt['ODDS'][start:end] = point_estimates[3]
-        grouppt['z_mode_ml'][start:end] = point_estimates[4]
-        grouppt['z_mode_ml_red_chi2'][start:end] = point_estimates[5]
+        for s, suffix in enumerate(self.suffices):
+            grouppt[f'z_mean{suffix}'][start:end] = point_estimates[6*s+0]
+            grouppt[f'z_mode{suffix}'][start:end] = point_estimates[6*s+1]
+            grouppt[f'z_median{suffix}'][start:end] = point_estimates[6*s+2]
+            grouppt[f'ODDS{suffix}'][start:end] = point_estimates[6*s+3]
+            grouppt[f'z_mode_ml{suffix}'][start:end] = point_estimates[6*s+4]
+            grouppt[f'z_mode_ml_red_chi2{suffix}'][start:end] = point_estimates[6*s+5]
 
 
 def pdf_median(z, p):
