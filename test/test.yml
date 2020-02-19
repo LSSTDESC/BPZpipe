@@ -4,18 +4,15 @@ launcher: local
 modules: bpzpipe
 
 stages:
-    - name: BPZpipeStage1
-      nprocess: 1
+  - name: BPZ_pz_pdf
+    nprocess: 1
 
 output_dir: ./outputs
 
 inputs:
-    input_photometry_file: test/test1000.h5
-
+    photometry_catalog: test/test1000_h5pyfmt_new.h5
 
 resume: False
 log_dir: ./test/logs
 pipeline_log: ./test/log.txt
 config: test/config.yml
-
-

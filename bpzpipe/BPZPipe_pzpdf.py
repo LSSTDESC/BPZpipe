@@ -23,7 +23,7 @@ class BPZ_pz_pdf(PipelineStage):
     ]
     config_options = {
         "path_to_bpz": str,
-        "metacal_fluxes": False, #if true, sets suffices to metacal variants   
+        "metacal_fluxes": False, # if true, sets suffices to metacal variants   
         "dz":   0.01,
         "zmin": 0.005,
         "zmax": 3.505,
@@ -39,18 +39,17 @@ class BPZ_pz_pdf(PipelineStage):
         "sigma_g": 0.03,  # use sigma_g <= 0 for no convolution
         "chunk_rows": 100,
         "mag_err_min": 1e-3,
-        "sigma_intrins": 0.05, #"intrinsic" assumed scatter, used in ODDS
-        "odds_int": 0.99445, #number of sigma_intrins to integrate +/- around peak
+        "sigma_intrins": 0.05, # "intrinsic" assumed scatter, used in ODDS
+        "odds_int": 0.99445,
+        # number of sigma_intrins to integrate +/- around peak
         # note that 1.95993 is the number of sigma you get for old "ODDS" =0.95 
-        #in old BPZ, 0.68 is 0.99445
-        #"point_estimate": "mode",  # mean, mode, or median
+        # in old BPZ, 0.68 is 0.99445
     }
 
     def run(self):
         
         starttime = time.time()
         self.setup_bpz()
-
 
         # Load the template BPZ will need from the BPZ sub-directories
         z, flux_templates = self.load_templates()
@@ -62,7 +61,6 @@ class BPZ_pz_pdf(PipelineStage):
             suffices = [""]
         else:
             suffices = ["", "_1p", "_1m", "_2p", "_2m"]
-            #suffices = ["","_1p", "_1m"]
         self.suffices = suffices 
         bands = self.config['bands']
         cols =  [f'mag_{band}_lsst{suffix}' for band in bands for suffix in suffices] 
@@ -80,7 +78,9 @@ class BPZ_pz_pdf(PipelineStage):
         # each processor will only be given the sub-set of data it is 
         # responsible for.  The HDF5 parallel output mode means they can
         # all write to the file at once too.
-        for start, end, data in self.iterate_hdf('photometry_catalog', "photometry", cols, chunk_rows):
+        for start, end, data in self.iterate_hdf('photometry_catalog',
+                                                 "photometry", cols,
+                                                 chunk_rows):
             print(f"Process {self.rank} running photo-z for rows {start}-{end}")
 
             # Calculate the pseudo-fluxes that we need
@@ -101,13 +101,13 @@ class BPZ_pz_pdf(PipelineStage):
     def setup_bpz(self):
         bpz_path = self.config['path_to_bpz']
 
-        #BPZ uses paths relevant to an environment variable, set this
+        # BPZ uses paths relative to an environment variable, set this
         os.environ["BPZPY3PATH"] = bpz_path
 
-        #BPZ is so old that it has some leftover references to NUMERIX
+        # BPZ is so old that it has some leftover references to NUMERIX
         os.environ["NUMERIX"]="numpy"
 
-        #need to set the env. variable to set up cori for mpi
+        # need to set the env. variable to set up cori for mpi
         os.environ["CECI_SETUP"]="/global/projecta/projectdirs/lsst/groups/PZ/BPZ/BPZpipe/test/setup-cori-update"
         os.environ["HDF5_USE_FILE_LOCKING"]="FALSE"
         
@@ -120,24 +120,18 @@ class BPZ_pz_pdf(PipelineStage):
     def prepare_output(self, z):
         """
         Prepare the output HDF5 file for writing.
-
         Note that this is done by all the processes if running in parallel;
         that is part of the design of HDF5.
-    
         Parameters
         ----------
-
         nobj: int
             Number of objects in the catalog
-
         z: array
             Points on the redshift axis that the PDF will be evaluated at.
-
         Returns
         -------
         f: h5py.File object
             The output file, opened for writing.
-
         """
 
         # Work out how much space we will need.
@@ -162,7 +156,8 @@ class BPZ_pz_pdf(PipelineStage):
             grouppt.create_dataset(f'z_median{suffix}', (nobj,), dtype='f4')
             grouppt.create_dataset(f'ODDS{suffix}', (nobj,), dtype = 'f4')
             grouppt.create_dataset(f'z_mode_ml{suffix}', (nobj,), dtype= 'f4')
-            grouppt.create_dataset(f'z_mode_ml_red_chi2{suffix}', (nobj,), dtype='f4')
+            grouppt.create_dataset(f'z_mode_ml_red_chi2{suffix}', (nobj,),
+                                   dtype='f4')
         group = f.create_group('pdf')
         group.create_dataset("zgrid", (nz,), dtype='f4')
         group.create_dataset("pdf", (nobj,nz), dtype='f4')
@@ -212,8 +207,6 @@ class BPZ_pz_pdf(PipelineStage):
         from bpz_tools_py3 import mag2flux, e_mag2frac
 
         bands = self.config['bands']
-        ##suffices = ["", "_1p", "_1m", "_2p", "_2m"]
-        #suffices = [""]
         
         # Load the magnitudes
         zp_errors = np.array(self.config['zp_errors'])
@@ -240,16 +233,16 @@ class BPZ_pz_pdf(PipelineStage):
             # Check which is which here, to use with the ZP errors below
             seen1 = (flux > 0) & (flux_err > 0)
             seen = np.where(seen1)
-            #unseen = np.where(~seen1)
-            #replace Joe's definition with more standard BPZ style
+            # unseen = np.where(~seen1)
+            # replace Joe's definition with more standard BPZ style
             nondetect = 99.
             nondetflux = 10.**(-0.4*nondetect)
             unseen = np.isclose(flux,nondetflux,atol=nondetflux*0.5)
 
-            #replace mag = 99 values with 0 flux and 1 sigma limiting magnitude
-            #value, which is stored in the mag_errs column for non-detects
-            #NOTE: We should check that this same convention will be used in
-            #LSST, or change how we handle non-detects here!
+            # replace mag = 99 values with 0 flux and 1 sigma limiting magnitude
+            # value, which is stored in the mag_errs column for non-detects
+            # NOTE: We should check that this same convention will be used in
+            # LSST, or change how we handle non-detects here!
             flux[unseen] = 0.
             flux_err[unseen]= 10.**(-0.4*np.abs(mag_errs[unseen]))
 
@@ -301,9 +294,7 @@ class BPZ_pz_pdf(PipelineStage):
         point_estimates = np.zeros((6*num_suffices, ng))
 #        point_estimator = self.config['point_estimate']
 
-        # Metacal variants
-        ##suffices = ["", "_1p", "_1m", "_2p", "_2m"]
-        #suffices = [""]
+        # Run metacal variants if included, or just base if not
         for s, suffix in enumerate(self.suffices):
             for i in range(ng):
                 # Pull out the rows of data for this galaxy
@@ -320,29 +311,24 @@ class BPZ_pz_pdf(PipelineStage):
                 if suffix=="":
                     pdfs[i] = pdf
                 
-                #Remove selector and compute all three point est.
-                #variants to store
-                #if point_estimator == 'mean':
+                # Remove selector and compute all three point est.
+                # variants to store
+                # 'mean'
                 # The pdf already sums to unity, so this gives us the mean
                 point_estimates[6*s+0, i] = (pdf * z).sum()
-                #elif point_estimator == 'mode':
+                # 'mode'
                 # This is the BPZ default
                 point_estimates[6*s+1, i] = z[np.argmax(pdf)]
-                #elif point_estimator == 'median':
-                # Just for completeness, not idea if sensible. Defined\
-                #below
+                # 'median'
+                # Just for completeness, not idea if sensible. Defined
+                # below
                 point_estimates[6*s+2, i] = pdf_median(z, pdf)
-                #else:
-                #    raise ValueError(f"Unknown value for point_estimate\
-                #parameter"
-                #        f"'{point_estimator}' - should be 'mean', 'mode'\,
-                #or 'median'")
-
+                # ODDS parameter
                 point_estimates[6*s+3,i] = self.calculate_odds(z,
                                                            point_estimates[1,i],
                                                            pdf)
-                #tack on the max likelihood point redshift (pre-prior) \
-                #and reduced chi^2
+                #tack on the max likelihood point redshift (pre-prior) 
+                # and reduced chi^2 at the max likelihood point
                 point_estimates[6*s+4,i] = zb_ml
                 point_estimates[6*s+5,i] = red_chi_ml
                 
@@ -351,8 +337,8 @@ class BPZ_pz_pdf(PipelineStage):
 
     def calculate_odds(self, z, zb, pdf):
         """
-        calculates the integrated pdf between -N*sigma_intrins and +N*sigma_intrins
-        around the mode of the PDF, zb
+        calculates the integrated pdf between -N*sigma_intrins and 
+        +N*sigma_intrins around the mode of the PDF, zb
         parameters: 
           -sigma_intrins: intrinsic scatter of distn, read in from config 
           -odds_int: number of sigma_intrins to multiply by to define interval
@@ -365,8 +351,8 @@ class BPZ_pz_pdf(PipelineStage):
         if np.isclose(cumpdf[-1],0.0):
             return 0.0
         else:
-            zo1 = zb - self.config['sigma_intrins']*self.config['odds_int']*(1.+zb)
-            zo2 = zb + self.config['sigma_intrins']*self.config['odds_int']*(1.+zb)
+            zo1 = zb-self.config['sigma_intrins']*self.config['odds_int']*(1.+zb)
+            zo2 = zb+self.config['sigma_intrins']*self.config['odds_int']*(1.+zb)
             i1 = np.searchsorted(z,zo1)-1
             i2 = np.searchsorted(z,zo2)
             if i1<0:
@@ -388,14 +374,19 @@ class BPZ_pz_pdf(PipelineStage):
         nt = flux_templates.shape[1]
 
         # The likelihood and prior...
-        #modify to add back in chisq calc
-        #L = p_c_z_t(flux, flux_err, flux_templates).likelihood
+        # modify code to add back in chisq calc
+        # L = p_c_z_t(flux, flux_err, flux_templates).likelihood
         pczt = p_c_z_t(flux, flux_err, flux_templates)
         L = pczt.likelihood
         zb_ml = pczt.i_z_ml
         reduced_chi_ml = pczt.min_chi2/float(flux_templates.shape[2]-1.)
 
-        P = prior(z, mag_0, prior_file, nt, ninterp=ninterp)
+        # old prior code returns NoneType for prior if "flat" or "none"
+        # just hard code the no prior case for now for backward compatibility
+        if prior_file == 'flat' or prior_file == 'none':
+            P = np.ones(L.shape)
+        else:
+            P = prior(z, mag_0, prior_file, nt, ninterp=ninterp)
 
         # Time for everyone's favourite Theorem!
         post = L * P
@@ -416,9 +407,9 @@ class BPZ_pz_pdf(PipelineStage):
         post_z[post_z < (p_max * p_min)] = 0
 
         # Normalize in the same way that BPZ does
-        #But, only normalize if the elements don't sum to zero
-        #if they are all zero, just leave p(z) as all zeros, as no templates
-        #are a good fit.
+        # But, only normalize if the elements don't sum to zero
+        # if they are all zero, just leave p(z) as all zeros, as no templates
+        # are a good fit.
         if not np.isclose(post_z.sum(),0.0):
             post_z /= post_z.sum()
         
@@ -465,7 +456,7 @@ def pdf_median(z, p):
     psum = p.sum()
     cdf = np.cumsum(p)
     if np.isclose(psum,0.0):
-        #print("problem with p(z), forcing to 0.0")
+        # print("problem with p(z), forcing to 0.0")
         return 0.0
     else:
         cdf = np.concatenate([[0.0], cdf])
