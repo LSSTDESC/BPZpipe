@@ -37,8 +37,8 @@ If you are running on cori at NERSC you can run the test batch script
 ```bash
 sbatch runbpzpipe_batch.sh
 ```
-to run the same 1000 galaxy test sample, and shows the necessary format
-for running in the NERSC environment.
+to run the same 1000 galaxy test sample. This script also shows the
+necessary format for running in the NERSC environment.
 
 Notes
 -----
