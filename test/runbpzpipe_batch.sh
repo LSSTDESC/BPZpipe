@@ -16,6 +16,6 @@ module load gsl/2.5
 
 export CECI_SETUP="/global/projecta/projectdirs/lsst/groups/PZ/BPZ/BPZpipe/test/setup-cori-update"
 export HDF5_USE_FILE_LOCKING=FALSE
-export PYTHONPATH=$PYTHONPATH:/global/projecta/projectdirs/lsst/groups/PZ/BPZ/BPZpipe:/global/homes/s/schmidt9/DESC/software/descformats/DESCFormats/descformats:/global/homes/s/schmidt9/DESC/software/ceci/ceci:/global/projecta/projectdirs/lsst/groups/PZ/Packages/parsl0.5.2/lib/python3.7/site-packages
+export PYTHONPATH=/global/projecta/projectdirs/lsst/groups/PZ/BPZ/BPZpipe:/global/projecta/projectdirs/lsst/groups/PZ/Packages/descformats/lib/python3.6/site-packages:/global/projecta/projectdirs/lsst/groups/PZ/Packages/ceci/ceci/ceci:$PYTHONPATH
 
 srun -n 6 python3 -m bpzpipe BPZ_pz_pdf  --photometry_catalog=./test1000_h5pyfmt_new.h5 --config=./config.yml --photoz_pdfs=./outputs/test1000_outputfile.hdf5 --mpi
