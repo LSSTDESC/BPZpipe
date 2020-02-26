@@ -1,6 +1,6 @@
 from ceci import PipelineStage
 from descformats import TextFile, HDFFile, YamlFile
-from txpipe.data_types import PhotozPDFFile
+#from txpipe.data_types import PhotozPDFFile
 import os
 import sys
 import numpy as np
@@ -16,7 +16,7 @@ class PZBPZ2(PipelineStage):
         ('photometry_catalog', HDFFile),
     ]
     outputs = [
-        ('photoz_pdfs', PhotozPDFFile),
+        ('photoz_pdfs', HDFFile),
     ]
     config_options = {
         "path_to_bpz": str,
